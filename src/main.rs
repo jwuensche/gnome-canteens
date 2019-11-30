@@ -1,46 +1,65 @@
-#![cfg_attr(not(feature = "gtk_3_10"), allow(unused_variables, unused_mut))]
+use vgtk::{ext::*, gtk, run, Component, UpdateAction, VNode};
+use vgtk::lib::{gtk::*, gio::ApplicationFlags};
 
-extern crate gio;
-extern crate gtk;
+pub mod entry;
+pub mod saved;
+mod checklist;
 
-use gio::prelude::*;
-use gtk::prelude::*;
-use gtk::{Builder, Button};
+use entry::Entry;
+use saved::SavedEntries;
 
-use std::env::args;
-
-fn build_ui(application: &gtk::Application) {
-    let overvew = include_str!("./ui/canteen_list.glade");
-    let builder = Builder::new_from_string(overvew);
-
-    let window: gtk::Window = builder.get_object("window").expect("Couldn't get window");
-    window.set_application(Some(application));
-    set_titlebar(&window);
-
-    window.show_all();
+#[derive(Default)]
+pub struct App {
+    entries: SavedEntries,
 }
 
-fn set_titlebar(window: &gtk::Window) {
-    let bar = gtk::HeaderBar::new();
-    bar.set_title(Some("Gnome Canteens"));
-    bar.set_subtitle(Some("Select your favorite canteens"));
-    bar.set_show_close_button(true);
-    let back_button = Button::new_from_icon_name(Some("gtk-go-back"), gtk::IconSize::Menu);
-    back_button.connect_clicked(|button: &gtk::Button| {
-        println!("foo, button clicked");
-    });
-    bar.pack_start(&back_button);
-    window.set_titlebar(Some(&bar));
+#[derive(Clone, Debug)]
+pub enum AppMessage {
+    Exit,
+}
+
+impl Component for App {
+    type Message = AppMessage;
+    type Properties = ();
+
+    fn create(_props: Self::Properties) -> Self {
+        let entries = SavedEntries::new()
+            .with_entry(Entry::new("FooBar".to_string(), "Bar".to_string(), true))
+            .with_entry(Entry::new("FooBar2".to_string(), "Bar".to_string(), true))
+            .with_entry(Entry::new("FooBar3".to_string(), "Bar".to_string(), true))
+            .with_entry(Entry::new("FooBar4".to_string(), "Bar".to_string(), true));
+        Self {
+            entries,
+        }
+    }
+
+    fn update(&mut self, message: AppMessage) -> UpdateAction<Self> {
+        match message {
+            AppMessage::Exit => {
+                vgtk::quit();
+                UpdateAction::None
+            }
+        }
+    }
+
+    fn view(&self) -> VNode<App> {
+        gtk! {
+            <Application::new_unwrap(Some("com.github.gnome_canteens"), ApplicationFlags::empty())>
+                <Window>
+                <HeaderBar title="Gnome Canteens" show_close_button=true>
+                    <Button HeaderBar::pack_type=PackType::Start image="gtk-go-back"/>
+                </HeaderBar>
+                <Stack transition_duration=2 transition_type=StackTransitionType::SlideLeft>
+                    {
+                        self.entries.render()
+                    }
+                </Stack>
+                </Window>
+            </Application>
+        }
+    }
 }
 
 fn main() {
-    let application =
-        gtk::Application::new(Some("com.github.gtk-rs.examples.grid"), Default::default())
-            .expect("Initialization failed...");
-
-    application.connect_activate(|app| {
-        build_ui(app);
-    });
-
-    application.run(&args().collect::<Vec<_>>());
+    std::process::exit(run::<App>());
 }
